@@ -146,14 +146,40 @@ fpsDisplay.textContent=frameCount+' FPS';
 frameCount=0;
 },1000);
 
+// Keyboard input
+const keyMap={
+'Enter':'ENTER','Backspace':'BACKSPACE','Tab':'TAB','Escape':'ESCAPE',
+'Delete':'DELETE','Insert':'INSERT','Shift':'SHIFT','Control':'CONTROL',
+'Alt':'ALT','CapsLock':'CAPSLOCK','NumLock':'NUMLOCK','ScrollLock':'SCROLLLOCK',
+'PrintScreen':'PRINTSCREEN','Pause':'PAUSE',
+'ArrowUp':'UP','ArrowDown':'DOWN','ArrowLeft':'LEFT','ArrowRight':'RIGHT',
+'Home':'HOME','End':'END','PageUp':'PAGEUP','PageDown':'PAGEDOWN'
+};
+for(let i=1;i<=12;i++)keyMap['F'+i]='F'+i;
+
+function keyName(e){
+return keyMap[e.key]||(e.key.length===1?e.key.toUpperCase():null);
+}
+
+function onKey(e,down){
+if(!connected)return;
+const key=keyName(e);
+if(!key)return;
+e.preventDefault();
+ws.send(JSON.stringify({type:'input',event:down?'keydown':'keyup',key}));
+}
+
+document.addEventListener('keydown',e=>onKey(e,true));
+document.addEventListener('keyup',e=>onKey(e,false));
+
 // Touch -> mouse input
 let activeTouches=0;
 let lastTouch=null;
 let scrollAccumX=0,scrollAccumY=0;
 
-function sendInput(event,x,y){
+function sendInput(event,x,y,button){
 if(!ws||ws.readyState!==WebSocket.OPEN)return;
-ws.send(JSON.stringify({type:'input',event,x,y:y??null,button:1}));
+ws.send(JSON.stringify({type:'input',event,x,y:y??null,button:button??1}));
 }
 
 function getPos(e){
@@ -216,8 +242,16 @@ lastScroll=null;
 remoteScreen.addEventListener('click',(e)=>{
 if(!lastTouch&&connected){
 const pos=getPos(e);
-sendInput('click',pos.x,pos.y);
+sendInput('click',pos.x,pos.y,e.button);
 }
+});
+
+remoteScreen.addEventListener('contextmenu',(e)=>{
+e.preventDefault();
+if(!connected)return;
+const pos=getPos(e);
+sendInput('mousedown',pos.x,pos.y,2);
+ws.send(JSON.stringify({type:'input',event:'mouseup',x:pos.x,y:pos.y,button:2}));
 });
 
 // Show info bar on tap near top

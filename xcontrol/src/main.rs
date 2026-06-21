@@ -314,14 +314,15 @@ async fn run_session(
 
 fn handle_input(msg: &serde_json::Value) {
     let event = msg.get("event").and_then(|v| v.as_str()).unwrap_or("");
+    let button = msg.get("button").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
     match event {
         "mousedown" => {
             let x = msg.get("x").and_then(|v| v.as_u64()).unwrap_or(0) as i32;
             let y = msg.get("y").and_then(|v| v.as_u64()).unwrap_or(0) as i32;
             input::mouse_move(x, y);
-            input::mouse_click(true);
+            input::mouse_click_button(button, true);
         }
-        "mouseup" => input::mouse_click(false),
+        "mouseup" => input::mouse_click_button(button, false),
         "mousemove" => {
             let x = msg.get("x").and_then(|v| v.as_u64()).unwrap_or(0) as i32;
             let y = msg.get("y").and_then(|v| v.as_u64()).unwrap_or(0) as i32;
@@ -331,9 +332,9 @@ fn handle_input(msg: &serde_json::Value) {
             let x = msg.get("x").and_then(|v| v.as_u64()).unwrap_or(0) as i32;
             let y = msg.get("y").and_then(|v| v.as_u64()).unwrap_or(0) as i32;
             input::mouse_move(x, y);
-            input::mouse_click(true);
+            input::mouse_click_button(button, true);
             std::thread::sleep(std::time::Duration::from_millis(50));
-            input::mouse_click(false);
+            input::mouse_click_button(button, false);
         }
         "scroll" => {
             let dy = msg.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
