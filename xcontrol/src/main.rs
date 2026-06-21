@@ -57,7 +57,7 @@ unsafe fn add_tray(hwnd: HWND) {
     nid.uID = 1;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = WM_TRAY;
-    nid.hIcon = LoadImageW(std::ptr::null_mut(), IDI_APPLICATION as *mut _, IMAGE_ICON, 16, 16, LR_SHARED) as HICON;
+    nid.hIcon = LoadImageW(GetModuleHandleW(std::ptr::null()), 100 as *mut _, IMAGE_ICON, 16, 16, 0) as HICON;
     let tip = wstr("X-Control Agent");
     for (i, &c) in tip.iter().enumerate().take(127) {
         let s: &mut u16 = &mut nid.szTip[i];
@@ -176,7 +176,7 @@ fn main() {
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = Some(wnd_proc);
         wc.hInstance = h;
-        wc.hIcon = LoadImageW(std::ptr::null_mut(), IDI_APPLICATION as *mut _, IMAGE_ICON, 0, 0, LR_SHARED) as HICON;
+        wc.hIcon = LoadImageW(h, 100 as *mut _, IMAGE_ICON, 32, 32, 0) as HICON;
         wc.hCursor = LoadCursorW(std::ptr::null_mut(), IDC_ARROW);
         wc.hbrBackground = (COLOR_WINDOW + 1) as HBRUSH;
         wc.lpszClassName = class.as_ptr();
