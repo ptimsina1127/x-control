@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>X-Control</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#000;color:#fff;overflow:hidden;height:100dvh;width:100vw;touch-action:none;-webkit-user-select:none;user-select:none}
+#pin-screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a2e,#16213e);z-index:10;gap:24px;padding:20px}
+#pin-screen.hidden{display:none}
+#pin-screen h1{font-size:28px;font-weight:600;color:#e0e0e0;margin-bottom:8px}
+#pin-screen p{font-size:16px;color:#888;text-align:center;line-height:1.5}
+#pin-input{width:260px;height:64px;font-size:36px;text-align:center;letter-spacing:12px;background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);border-radius:16px;color:#fff;outline:none;caret-color:#4fc3f7;font-family:monospace}
+#pin-input:focus{border-color:#4fc3f7}
+#connect-btn{width:260px;height:56px;font-size:20px;font-weight:600;background:#4fc3f7;color:#000;border:none;border-radius:16px;cursor:pointer;transition:transform .15s,opacity .15s}
+#connect-btn:active{transform:scale(0.96);opacity:.8}
+#connect-btn:disabled{opacity:.4;transform:none}
+#status{font-size:14px;color:#888;margin-top:-8px}
+#status.error{color:#ef5350}
+#status.connected{color:#66bb6a}
+#viewer{position:fixed;inset:0;display:none;background:#000}
+#viewer.active{display:block}
+#remote-screen{width:100%;height:100%;object-fit:contain;image-rendering:auto;display:block}
+#info-bar{position:fixed;top:0;left:0;right:0;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);z-index:5;gap:12px;transition:opacity .5s;opacity:1}
+#info-bar.hidden{opacity:0;pointer-events:none}
+#info-bar span{font-size:13px;color:#ccc}
+#disconnect-btn{position:absolute;right:12px;top:8px;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:8px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="pin-screen">
+<h1>X-Control</h1>
+<p>Enter the PIN shown on X-Control<br>app on other PC</p>
+<input id="pin-input" type="text" inputmode="text" maxlength="5" placeholder="PIN" autocomplete="off">
+<button id="connect-btn" disabled>Connect</button>
+<div id="status">Enter a 5-character PIN</div>
+</div>
+<div id="viewer">
+<img id="remote-screen" alt="Remote screen">
+<div id="info-bar" class="hidden">
+<span id="fps-display">0 FPS</span>
+<button id="disconnect-btn">Disconnect</button>
+</div>
+</div>
+<script>
+const $=(s)=>document.querySelector(s);
+const pinInput=$('#pin-input');
+const connectBtn=$('#connect-btn');
+const statusEl=$('#status');
+const pinScreen=$('#pin-screen');
+const viewer=$('#viewer');
+const remoteScreen=$('#remote-screen');
+const infoBar=$('#info-bar');
+const fpsDisplay=$('#fps-display');
+
+let ws=null;
+let connected=false;
+let frameCount=0;
+let fpsTimer=null;
+
+pinInput.addEventListener('input',()=>{
+const v=pinInput.value.toUpperCase().replace(/[^A-H]/g,'').slice(0,5);
+pinInput.value=v;
+connectBtn.disabled=v.length!==5;
+statusEl.textContent=v.length===5?'Tap Connect':'Enter a 5-character PIN';
+statusEl.className='';
+});
+
+connectBtn.addEventListener('click',connect);
+pinInput.addEventListener('keydown',(e)=>{if(e.key==='Enter'&&!connectBtn.disabled)connect()});
+
+function connect(){
+const pin=pinInput.value;
+if(pin.length!==5)return;
+statusEl.textContent='Connecting...';
+statusEl.className='';
+const proto=location.protocol==='https:'?'wss:':'ws:';
+const wsUrl=`${proto}//${location.host}/ws`;
+ws=new WebSocket(wsUrl);
+
+ws.onopen=()=>{
+ws.send(JSON.stringify({type:'join',pin}));
+};
+
+ws.onmessage=(e)=>{
+if(e.data instanceof Blob){
+frameCount++;
+remoteScreen.src=URL.createObjectURL(e.data);
+if(!viewer.classList.contains('active')){
+viewer.classList.add('active');
+pinScreen.classList.add('hidden');
+infoBar.classList.remove('hidden');
+connected=true;
+setTimeout(()=>infoBar.classList.add('hidden'),5000);
+}
+}else{
+try{
+const msg=JSON.parse(e.data);
+if(msg.type==='joined'){
+statusEl.textContent='Connected!';
+statusEl.className='connected';
+connected=true;
+}else if(msg.type==='error'){
+statusEl.textContent=msg.msg;
+statusEl.className='error';
+ws.close();
+}
+}catch(e){}
+}
+};
+
+ws.onclose=()=>{
+if(!connected){
+statusEl.textContent='Connection failed';
+statusEl.className='error';
+connectBtn.disabled=false;
+}
+disconnect();
+};
+
+ws.onerror=()=>{
+statusEl.textContent='Connection error';
+statusEl.className='error';
+};
+}
+
+function disconnect(){
+if(ws){ws.close();ws=null}
+connected=false;
+viewer.classList.remove('active');
+pinScreen.classList.remove('hidden');
+infoBar.classList.add('hidden');
+statusEl.textContent='Disconnected';
+statusEl.className='';
+connectBtn.disabled=false;
+if(fpsTimer){clearInterval(fpsTimer);fpsTimer=null}
+}
+
+$('#disconnect-btn').addEventListener('click',disconnect);
+
+// FPS counter
+setInterval(()=>{
+fpsDisplay.textContent=frameCount+' FPS';
+frameCount=0;
+},1000);
+
+// Touch -> mouse input
+let activeTouches=0;
+let lastTouch=null;
+let scrollAccumX=0,scrollAccumY=0;
+
+function sendInput(event,x,y){
+if(!ws||ws.readyState!==WebSocket.OPEN)return;
+ws.send(JSON.stringify({type:'input',event,x,y:y??null,button:1}));
+}
+
+function getPos(e){
+const rect=remoteScreen.getBoundingClientRect();
+const touch=e.touches?e.touches[0]:e;
+const scaleX=remoteScreen.naturalWidth||1920;
+const scaleY=remoteScreen.naturalHeight||1080;
+const x=Math.round((touch.clientX-rect.left)/rect.width*scaleX);
+const y=Math.round((touch.clientY-rect.top)/rect.height*scaleY);
+return{x,y};
+}
+
+remoteScreen.addEventListener('touchstart',(e)=>{
+e.preventDefault();
+activeTouches=e.touches.length;
+if(activeTouches===1){
+const pos=getPos(e);
+lastTouch=pos;
+sendInput('mousedown',pos.x,pos.y);
+}else if(activeTouches===2){
+scrollAccumX=0;scrollAccumY=0;
+}
+},{passive:false});
+
+remoteScreen.addEventListener('touchmove',(e)=>{
+e.preventDefault();
+if(e.touches.length===1){
+const pos=getPos(e);
+sendInput('mousemove',pos.x,pos.y);
+}else if(e.touches.length===2){
+// Scroll with two fingers
+const t1=e.touches[0],t2=e.touches[1];
+if(lastScroll){
+const dx=(t1.clientX+t2.clientX)/2-lastScroll.mx;
+const dy=(t1.clientY+t2.clientY)/2-lastScroll.my;
+scrollAccumX+=dx;scrollAccumY+=dy;
+if(Math.abs(scrollAccumX)>5||Math.abs(scrollAccumY)>5){
+sendInput('scroll',Math.round(scrollAccumX),Math.round(scrollAccumY));
+scrollAccumX=0;scrollAccumY=0;
+}
+lastScroll={mx:(t1.clientX+t2.clientX)/2,my:(t1.clientY+t2.clientY)/2};
+}else{
+lastScroll={mx:(t1.clientX+t2.clientX)/2,my:(t1.clientY+t2.clientY)/2};
+}
+}
+},{passive:false});
+
+let lastScroll=null;
+
+remoteScreen.addEventListener('touchend',(e)=>{
+e.preventDefault();
+activeTouches=e.touches.length;
+if(activeTouches===0){
+sendInput('mouseup',lastTouch?.x??0,lastTouch?.y??0);
+lastTouch=null;
+lastScroll=null;
+}
+},{passive:false});
+
+remoteScreen.addEventListener('click',(e)=>{
+if(!lastTouch&&connected){
+const pos=getPos(e);
+sendInput('click',pos.x,pos.y);
+}
+});
+
+// Show info bar on tap near top
+remoteScreen.addEventListener('touchstart',(e)=>{
+if(e.touches[0].clientY<60){
+infoBar.classList.remove('hidden');
+clearTimeout(infoBar._hide);
+infoBar._hide=setTimeout(()=>infoBar.classList.add('hidden'),5000);
+}
+},{passive:true});
+</script>
+</body>
+</html>
